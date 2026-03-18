@@ -515,6 +515,23 @@ module cv32e40x_if_stage import cv32e40x_pkg::*;
   // eXtension interface
   //---------------------------------------------------------------------------
 
+  // We need to buffer xif_offloading because the ID can advance and the IF not
+  // So sometimes the xif_id is not incremented, if only using xif_offloading_id_i
+  logic xif_offloading_q;
+  always_ff @(posedge clk, negedge rst_n)
+  begin : XIF_OFFLOADING_REGISTER
+    if (rst_n == 1'b0) begin
+      xif_offloading_q    <= 1'b0;
+    end else begin
+      // IF Valid and ID Ready, we can clear the buffer
+      if (if_valid_o && id_ready_i) begin
+        xif_offloading_q      <= 1'b0;
+        // IF Not Valid, buffer xif_offloading_id_i if high
+      end else if (id_ready_i && xif_offloading_id_i) begin
+        xif_offloading_q      <= 1'b1;
+      end
+    end
+  end
   generate
     if (X_EXT) begin : x_ext
 
@@ -523,7 +540,7 @@ module cv32e40x_if_stage import cv32e40x_pkg::*;
       assign xif_compressed_if.compressed_req   = '0;
 
       // TODO:XIF assert that the oustanding IDs are unique
-      assign xif_id = xif_offloading_id_i ? if_id_pipe_o.xif_id + 1 : if_id_pipe_o.xif_id;
+      assign xif_id = (xif_offloading_id_i | xif_offloading_q) ? if_id_pipe_o.xif_id + 1 : if_id_pipe_o.xif_id;
 
     end else begin : no_x_ext
 
