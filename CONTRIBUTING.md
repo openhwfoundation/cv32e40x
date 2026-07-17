@@ -3,7 +3,7 @@ Contributors are encouraged to be a [member](https://www.openhwgroup.org/members
 OpenHW Group.  New members are always welcome.
 
 ## Getting Started
-The [OpenHW Work Flow](https://github.com/openhwgroup/core-v-docs/blob/master/verif/Common/OpenHWGroup_WorkFlow.pdf) document
+The [Open Source Development at the OpenHW Group](https://docs.openhwgroup.org/projects/core-v-mcu/doc-src/open-source-development-at-openhw.html) guide
 is required reading.  You will find information about the implementation and usage of the CORE-V verification environments
 in the [Verification Strategy](https://github.com/openhwgroup/core-v-docs/blob/master/verif/Common/OpenHWGroup_CORE-V_Verif_Strategy.pdf).
 
