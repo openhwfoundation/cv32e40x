@@ -36,6 +36,7 @@ module cv32e40x_id_stage import cv32e40x_pkg::*;
   parameter a_ext_e      A_EXT                  = A_NONE,
   parameter b_ext_e      B_EXT                  = B_NONE,
   parameter m_ext_e      M_EXT                  = M,
+  parameter ic_ext_e     IC_EXT                 = IC_NONE,
   parameter bit          X_EXT                  = 0,
   parameter int unsigned REGFILE_NUM_READ_PORTS = 2,
   parameter bit          CLIC                   = 1
@@ -390,6 +391,7 @@ module cv32e40x_id_stage import cv32e40x_pkg::*;
     .A_EXT                           ( A_EXT                     ),
     .B_EXT                           ( B_EXT                     ),
     .M_EXT                           ( M_EXT                     ),
+    .IC_EXT                          ( IC_EXT                    ),
     .CLIC                            ( CLIC                      )
   )
   decoder_i

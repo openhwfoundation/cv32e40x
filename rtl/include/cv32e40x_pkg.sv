@@ -87,6 +87,10 @@ typedef enum logic [ALU_OP_WIDTH-1:0]
  ALU_B_ORN    = 6'b101110, // funct3 = 110, zbb
  ALU_B_ANDN   = 6'b101111, // funct3 = 111, zbb
 
+ // TODO:Zicond set proper values for these two opcodes
+ ALU_CZEQZ    = 6'bzzzzzz, // (funct3 = 101)
+ ALU_CZNEZ    = 6'bzzzzzz, // (funct3 = 111)
+
  ALU_EQ       = 6'b010000, // funct3 = 000
  ALU_NE       = 6'b010001, // funct3 = 001
  ALU_SLT      = 6'b011010, // funct3 = 010, signed(3)
@@ -1552,6 +1556,9 @@ typedef struct packed {
 
   // Enum used for configuration of M extension
   typedef enum logic [1:0] {M_NONE, M, ZMMUL} m_ext_e;
+
+  // Enum used for configuration of Zicond extension
+  typedef enum logic {IC_NONE, ZICOND} ic_ext_e;
 
   // Pipe PC mux selector defines. Used to control PC mux in control FSM
   typedef enum logic[1:0] {

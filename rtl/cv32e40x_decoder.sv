@@ -118,12 +118,14 @@ module cv32e40x_decoder import cv32e40x_pkg::*;
   logic dec_a_rf_illegal_addr;
   logic dec_b_rf_illegal_addr;
   logic dec_m_rf_illegal_addr;
+  logic dec_zicond_rf_illegal_addr;
   logic rf_illegal_waddr;
 
   decoder_ctrl_t decoder_i_ctrl, decoder_i_ctrl_int;
   decoder_ctrl_t decoder_m_ctrl, decoder_m_ctrl_int;
   decoder_ctrl_t decoder_a_ctrl, decoder_a_ctrl_int;
   decoder_ctrl_t decoder_b_ctrl, decoder_b_ctrl_int;
+  decoder_ctrl_t decoder_zicond_ctrl, decoder_zicond_ctrl_int;
   decoder_ctrl_t decoder_ctrl_mux;
 
   assign instr_rdata = if_id_pipe_i.instr.bus_resp.rdata;
@@ -239,6 +241,29 @@ module cv32e40x_decoder import cv32e40x_pkg::*;
       assign decoder_m_ctrl = DECODER_CTRL_ILLEGAL_INSN;
     end
 
+    if (IC_EXT != IC_NONE) begin: zicond_decoder
+      // RV32Zicond extension decoder
+      cv32e40x_zicond_decoder
+      zicond_decoder_i
+      (
+       .instr_rdata_i  ( instr_rdata             ),
+       .decoder_ctrl_o ( decoder_zicond_ctrl_int )
+      );
+
+      assign dec_zicond_rf_illegal_addr = (decoder_zicond_ctrl_int.rf_re[0] && rf_illegal_raddr_o[0]) ||
+                                          (decoder_zicond_ctrl_int.rf_re[1] && rf_illegal_raddr_o[1]) ||
+                                          (decoder_zicond_ctrl_int.rf_we    && rf_illegal_waddr);
+
+      // Take illegal compressed instruction and illegal RV32E GPR address into account
+      assign decoder_zicond_ctrl = (dec_zicond_rf_illegal_addr || if_id_pipe_i.illegal_c_insn) ?
+                                   DECODER_CTRL_ILLEGAL_INSN :
+                                   decoder_zicond_ctrl_int;
+
+    end else begin: no_zicond_decoder
+      assign dec_zicond_rf_illegal_addr = 1'b0;
+      assign decoder_zicond_ctrl = DECODER_CTRL_ILLEGAL_INSN;
+    end
+
   endgenerate
 
   // Mux control outputs from decoders
@@ -249,6 +274,7 @@ module cv32e40x_decoder import cv32e40x_pkg::*;
       !decoder_a_ctrl.illegal_insn : decoder_ctrl_mux = decoder_a_ctrl; // A decoder got a match
       !decoder_i_ctrl.illegal_insn : decoder_ctrl_mux = decoder_i_ctrl; // I decoder got a match
       !decoder_b_ctrl.illegal_insn : decoder_ctrl_mux = decoder_b_ctrl; // B decoder got a match
+      !decoder_zicond_ctrl.illegal_insn : decoder_ctrl_mux = decoder_zicond_ctrl; // Zicond decoder got a match
       default                      : decoder_ctrl_mux = DECODER_CTRL_ILLEGAL_INSN; // No match from decoders, illegal instruction
     endcase
   end

@@ -49,7 +49,8 @@
 
 module cv32e40x_alu import cv32e40x_pkg::*;
 #(
-  parameter b_ext_e B_EXT  = B_NONE
+  parameter b_ext_e  B_EXT  = B_NONE
+  parameter ic_ext_e IC_EXT = IC_NONE
 )
 (
   input  alu_opcode_e       operator_i,
@@ -328,6 +329,25 @@ module cv32e40x_alu import cv32e40x_pkg::*;
     end
   endgenerate
 
+  // TODO:style make a cool heading for conditional zeroing?
+
+  logic czeqz_result [31:0];
+  logic cznez_result [31:0];
+
+  generate
+    if (IC_EXT == ZICOND) begin: icond
+
+      assign czeqz_result = operand_a_i & {(32){ |operand_b_i}};
+      assign cznez_result = operand_a_i & {(32){~|operand_b_i}};
+
+    end else begin: no_icond
+
+      assign czeqz_result = 32'h0;
+      assign cznez_result = 32'h0;
+
+    end
+  endgenerate
+
   ////////////////////////////////////////////////////////
   //   ____                 _ _     __  __              //
   //  |  _ \ ___  ___ _   _| | |_  |  \/  |_   ___  __  //
@@ -396,6 +416,9 @@ module cv32e40x_alu import cv32e40x_pkg::*;
       ALU_B_CLMUL  : result_o = clmul_result;
       ALU_B_CLMULH : result_o = clmulh_result;
       ALU_B_CLMULR : result_o = clmulr_result;
+
+      ALU_CZEQZ    : result_o = czeqz_result;
+      ALU_CZNEZ    : result_o = cznez_result;
 
       default: ;
     endcase
