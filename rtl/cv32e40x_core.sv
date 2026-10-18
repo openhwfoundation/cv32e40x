@@ -354,6 +354,7 @@ module cv32e40x_core import cv32e40x_pkg::*;
 
   // eXtension interface signals
   logic        xif_offloading_id;
+  logic        xif_kill_offloaded_id;
 
   logic        unused_signals;
 
@@ -582,7 +583,8 @@ module cv32e40x_core import cv32e40x_pkg::*;
 
     // eXtension interface
     .xif_issue_if                 ( xif_issue_if              ),
-    .xif_offloading_o             ( xif_offloading_id         )
+    .xif_offloading_o             ( xif_offloading_id         ),
+    .xif_kill_offloaded_o         ( xif_kill_offloaded_id     )
   );
 
   /////////////////////////////////////////////////////
@@ -1016,7 +1018,8 @@ module cv32e40x_core import cv32e40x_pkg::*;
 
     // eXtension interface
     .xif_commit_if                  ( xif_commit_if          ),
-    .xif_csr_error_i                ( xif_csr_error_ex       )
+    .xif_csr_error_i                ( xif_csr_error_ex       ),
+    .xif_kill_offloaded_id_i        ( xif_kill_offloaded_id  )
   );
 
   ////////////////////////////////////////////////////////////////////////
