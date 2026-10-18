@@ -130,7 +130,8 @@ module cv32e40x_controller_fsm import cv32e40x_pkg::*;
 
   // eXtension interface
   cv32e40x_if_xif.cpu_commit xif_commit_if,
-  input                      xif_csr_error_i
+  input                      xif_csr_error_i,
+  input                      xif_kill_offloaded_id_i  // Offloaded instruction killed in ID stage
 );
 
    // FSM state encoding
@@ -1453,6 +1454,10 @@ module cv32e40x_controller_fsm import cv32e40x_pkg::*;
       logic commit_valid_q; // Sticky bit for commit_valid
       logic commit_kill_q;  // Sticky bit for commit_kill
       logic kill_rejected;  // Signal used to kill rejected xif instructions
+      logic ex_commit_valid;  // Commit for the offloaded instruction in EX
+      logic ex_commit_kill;   // commit_kill for the offloaded instruction in EX
+      logic        kill_id_commit_q;    // Pending commit (kill) for an offloaded instruction killed in ID
+      logic [31:0] kill_id_commit_id_q; // ID of that instruction
 
       // TODO:XIF Add assertion to check the following:
       // Every issue interface transaction (whether accepted or not) has an associated commit interface
@@ -1464,18 +1469,40 @@ module cv32e40x_controller_fsm import cv32e40x_pkg::*;
       //       with commit_kill=1 (pipeline is not killed as we need to handle the illegal instruction in WB)
       // Can only allow commit when older instructions are guaranteed to complete without exceptions
       //       - EX is halted if offloaded in WB can cause an exception, causing below to evaluate to 0.
-      assign xif_commit_if.commit_valid       = (!ctrl_fsm_o.halt_ex || ctrl_fsm_o.kill_ex) &&
+      assign ex_commit_valid                  = (!ctrl_fsm_o.halt_ex || ctrl_fsm_o.kill_ex) &&
                                                  (id_ex_pipe_i.xif_en && id_ex_pipe_i.instr_valid) &&
-                                                 !commit_valid_q; // Make sure we signal only once per instruction
+                                                 !commit_valid_q &&   // Make sure we signal only once per instruction
+                                                 !kill_id_commit_q;   // Commit slot taken by an instruction killed in ID
 
-      assign xif_commit_if.commit.id          = id_ex_pipe_i.xif_meta.id;
-      assign xif_commit_if.commit.commit_kill = xif_csr_error_i || ctrl_fsm_o.kill_ex || kill_rejected;
+      assign ex_commit_kill                   = xif_csr_error_i || ctrl_fsm_o.kill_ex || kill_rejected;
+
+      // An instruction that completed its issue transaction (accepted or rejected) but is killed while
+      // still in the ID stage (e.g. interrupt or debug entry while ID waits for EX) never reaches EX,
+      // where the commit above is generated. Signal commit_kill = 1 for it in the next cycle, so that
+      // every issue transaction has a commit transaction. After kill_id the EX stage does not hold an
+      // offloaded instruction in that cycle (kill_ex flushed it, or EX holds the taken branch causing
+      // the kill), so the commit slot is free and commits stay in issue order.
+      always_ff @(posedge clk, negedge rst_n) begin : kill_id_commit_ctrl
+        if (rst_n == 1'b0) begin
+          kill_id_commit_q    <= 1'b0;
+          kill_id_commit_id_q <= '0;
+        end else begin
+          kill_id_commit_q <= xif_kill_offloaded_id_i;
+          if (xif_kill_offloaded_id_i) begin
+            kill_id_commit_id_q <= 32'(if_id_pipe_i.xif_id);
+          end
+        end
+      end
+
+      assign xif_commit_if.commit_valid       = ex_commit_valid || kill_id_commit_q;
+      assign xif_commit_if.commit.id          = kill_id_commit_q ? kill_id_commit_id_q : id_ex_pipe_i.xif_meta.id;
+      assign xif_commit_if.commit.commit_kill = kill_id_commit_q || ex_commit_kill;
 
       // Signal commit_kill=1 to all instructions rejected by the eXtension interface
       assign kill_rejected = (id_ex_pipe_i.xif_en && !id_ex_pipe_i.xif_meta.accepted) && id_ex_pipe_i.instr_valid;
 
       // Signal (to EX stage), that an (attempted) offloaded instructions is killed (clears ex_wb_pipe.xif_en)
-      assign ctrl_fsm_o.kill_xif = xif_commit_if.commit.commit_kill || commit_kill_q;
+      assign ctrl_fsm_o.kill_xif = ex_commit_kill || commit_kill_q;
 
       // Flag used to make sure we only signal commit_valid once for each instruction
       always_ff @(posedge clk, negedge rst_n) begin : commit_valid_ctrl
@@ -1487,8 +1514,8 @@ module cv32e40x_controller_fsm import cv32e40x_pkg::*;
             commit_valid_q <= 1'b0;
             commit_kill_q  <= 1'b0;
           end else begin
-            commit_valid_q <= (xif_commit_if.commit_valid || commit_valid_q);
-            commit_kill_q  <= (xif_commit_if.commit.commit_kill || commit_kill_q);
+            commit_valid_q <= (ex_commit_valid || commit_valid_q);
+            commit_kill_q  <= (ex_commit_kill || commit_kill_q);
           end
         end
       end

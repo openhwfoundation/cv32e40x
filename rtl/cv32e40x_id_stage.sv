@@ -97,7 +97,8 @@ module cv32e40x_id_stage import cv32e40x_pkg::*;
 
   // eXtension interface
   cv32e40x_if_xif.cpu_issue xif_issue_if,
-  output logic              xif_offloading_o
+  output logic              xif_offloading_o,
+  output logic              xif_kill_offloaded_o  // Offloaded (accepted or rejected) instruction killed in ID
 );
 
   // Source/Destination register instruction index
@@ -690,7 +691,8 @@ module cv32e40x_id_stage import cv32e40x_pkg::*;
     if (X_EXT) begin : x_ext
 
       // remember whether an instruction was accepted or rejected (required if EX stage is not ready)
-      // TODO:XIF check whether this state machine should be put back in its initial state when the instruction in ID gets killed
+      // The state is cleared when the instruction leaves ID or is killed in ID. In the latter case the
+      // controller signals commit_kill for the instruction (xif_kill_offloaded_o).
       logic xif_accepted_q, xif_rejected_q;
 
       assign xif_en = xif_insn_accept || xif_insn_reject;
@@ -720,6 +722,11 @@ module cv32e40x_id_stage import cv32e40x_pkg::*;
       // Keep xif_offloading_o high after an offloaded instruction was accepted or rejected to get
       // a new instruction ID from the IF stage
       assign xif_offloading_o             = xif_issue_if.issue_valid || xif_accepted_q || xif_rejected_q;
+
+      // An instruction whose issue transaction is done (accepted or rejected) but that is killed before
+      // it leaves ID never reaches EX, where commit transactions are generated. The controller signals
+      // commit_kill for it. An issue handshake cannot coincide with kill_id (issue_valid is gated by instr_valid).
+      assign xif_kill_offloaded_o         = ctrl_fsm_i.kill_id && (xif_accepted_q || xif_rejected_q);
 
       assign xif_issue_if.issue_req.instr = instr;
       assign xif_issue_if.issue_req.mode  = PRIV_LVL_M;
@@ -783,6 +790,7 @@ module cv32e40x_id_stage import cv32e40x_pkg::*;
       assign xif_issue_if.issue_req.ecs_valid = '0;
 
       assign xif_offloading_o                 = 1'b0;
+      assign xif_kill_offloaded_o             = 1'b0;
 
       logic unused_xif_signals;
       assign unused_xif_signals = xif_insn_reject | (|rf_illegal_raddr);
